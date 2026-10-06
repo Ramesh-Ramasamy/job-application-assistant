@@ -1,5 +1,6 @@
 import os
 
+import pandas as pd
 import streamlit as st
 
 import db
@@ -7,7 +8,7 @@ from agent import MAX_STEPS, run_agent
 from llm import LLM, LLMError
 from tools import fetch_job_page, pdf_to_text
 
-BUILD = "2026-10-06-b"
+BUILD = "2026-10-06-c"
 
 st.set_page_config(page_title="Job Application Assistant", page_icon="🧭", layout="wide")
 st.title("🧭 Job Application Assistant")
@@ -131,11 +132,28 @@ with tab_tracker:
     if not rows:
         st.info("No saved applications yet. Approve one on the first tab.")
     else:
-        st.dataframe(rows, use_container_width=True, hide_index=True)
-        c1, c2, c3 = st.columns([1, 2, 1])
-        app_id = c1.selectbox("Application", [r["id"] for r in rows])
-        status = c2.selectbox("New status", db.STATUSES)
-        if c3.button("Update"):
+        st.caption("Change a status directly in the table; it saves automatically.")
+        df = pd.DataFrame(rows)
+        edited = st.data_editor(
+            df,
+            key="tracker",
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "id": st.column_config.NumberColumn("#", width="small"),
+                "created_at": st.column_config.TextColumn("Saved (UTC)"),
+                "company": st.column_config.TextColumn("Company"),
+                "role": st.column_config.TextColumn("Role"),
+                "score": st.column_config.ProgressColumn("Match", min_value=0, max_value=100, format="%d%%"),
+                "status": st.column_config.SelectboxColumn("Status", options=db.STATUSES, required=True),
+                "url": st.column_config.LinkColumn("Job link"),
+            },
+            disabled=["id", "created_at", "company", "role", "score", "url"],
+        )
+        diff = edited[edited["status"] != df["status"]]
+        changed = [(int(r.id), r.status) for r in diff.itertuples()]
+        for app_id, status in changed:
             db.update_status(st.session_state.con, app_id, status)
-            st.rerun()
+        if changed:
+            st.toast(f"Saved status for {len(changed)} application(s)")
         st.caption("Note: on free Streamlit hosting this database resets when the app restarts. Download important drafts.")
