@@ -7,7 +7,7 @@ from agent import MAX_STEPS, run_agent
 from llm import LLM, LLMError
 from tools import fetch_job_page, pdf_to_text
 
-BUILD = "2026-09-29-a"
+BUILD = "2026-10-06-b"
 
 st.set_page_config(page_title="Job Application Assistant", page_icon="🧭", layout="wide")
 st.title("🧭 Job Application Assistant")
@@ -48,7 +48,7 @@ with tab_run:
         resume_text = st.text_area("...or paste resume text", height=160)
     with c2:
         st.subheader("2. The job")
-        jd_url = st.text_input("Job posting URL (optional, public pages only)")
+        jd_url = st.text_input("Job posting URL (optional; Workday/LinkedIn pages need pasting instead)")
         jd_text = st.text_area("...or paste the job description", height=160)
 
     if st.button("Run agent", type="primary"):
@@ -59,6 +59,11 @@ with tab_run:
                 jd = fetch_job_page(jd_url)
             except Exception as e:
                 st.error(f"Could not fetch the page ({e}). Paste the job description instead.")
+            if len(jd) < 300:
+                st.error("This job site loads the description with JavaScript (common for Workday, LinkedIn, "
+                         "Greenhouse embeds), so the app could not read it. Open the posting, copy the description "
+                         "text, and paste it into the box on the right.")
+                st.stop()
         if not resume or not jd:
             st.warning("Please provide both a resume and a job description.")
             st.stop()

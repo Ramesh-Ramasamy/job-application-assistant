@@ -1,6 +1,7 @@
 # Job Application Assistant (Agentic AI)
 
-**Live demo: LIVE_URL**
+**Live demo: https://ramesh-job-assistant.streamlit.app**
+(free hosting: if idle, click the wake-up button and wait a few seconds)
 
 Detailed notes for this project: [details.md](https://github.com/Ramesh-Ramasamy/job-application-assistant/blob/main/details.md)
 
