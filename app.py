@@ -1,6 +1,5 @@
 import os
 
-import pandas as pd
 import streamlit as st
 
 import db
@@ -8,7 +7,7 @@ from agent import MAX_STEPS, run_agent
 from llm import LLM, LLMError
 from tools import fetch_job_page, pdf_to_text
 
-BUILD = "2026-10-06-c"
+BUILD = "2026-10-06-d"
 
 st.set_page_config(page_title="Job Application Assistant", page_icon="🧭", layout="wide")
 st.title("🧭 Job Application Assistant")
@@ -127,33 +126,34 @@ with tab_run:
             app_id = db.save(st.session_state.con, s, st.session_state.get("jd_url", ""))
             st.success(f"Saved as application #{app_id}. Nothing was sent anywhere.")
 
+def _save_status(app_id: int) -> None:
+    status = st.session_state[f"status_{app_id}"]
+    db.update_status(st.session_state.con, app_id, status)
+    st.toast(f"Application #{app_id} -> {status}")
+
+
 with tab_tracker:
     rows = db.list_all(st.session_state.con)
     if not rows:
         st.info("No saved applications yet. Approve one on the first tab.")
     else:
-        st.caption("Change a status directly in the table; it saves automatically.")
-        df = pd.DataFrame(rows)
-        edited = st.data_editor(
-            df,
-            key="tracker",
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "id": st.column_config.NumberColumn("#", width="small"),
-                "created_at": st.column_config.TextColumn("Saved (UTC)"),
-                "company": st.column_config.TextColumn("Company"),
-                "role": st.column_config.TextColumn("Role"),
-                "score": st.column_config.ProgressColumn("Match", min_value=0, max_value=100, format="%d%%"),
-                "status": st.column_config.SelectboxColumn("Status", options=db.STATUSES, required=True),
-                "url": st.column_config.LinkColumn("Job link"),
-            },
-            disabled=["id", "created_at", "company", "role", "score", "url"],
-        )
-        diff = edited[edited["status"] != df["status"]]
-        changed = [(int(r.id), r.status) for r in diff.itertuples()]
-        for app_id, status in changed:
-            db.update_status(st.session_state.con, app_id, status)
-        if changed:
-            st.toast(f"Saved status for {len(changed)} application(s)")
-        st.caption("Note: on free Streamlit hosting this database resets when the app restarts. Download important drafts.")
+        widths = [0.4, 1.6, 2.2, 1.2, 1.6, 0.8]
+        head = st.columns(widths)
+        for col, title in zip(head, ["#", "Company", "Role", "Match", "Status", "Link"]):
+            col.markdown(f"**{title}**")
+        for r in rows:
+            c = st.columns(widths, vertical_alignment="center")
+            c[0].write(r["id"])
+            c[1].write(r["company"] or "-")
+            c[2].write(r["role"] or "-")
+            c[3].progress(min(max(int(r["score"] or 0), 0), 100), text=f"{r['score']}%")
+            c[4].selectbox(
+                "Status", db.STATUSES, index=db.STATUSES.index(r["status"]) if r["status"] in db.STATUSES else 0,
+                key=f"status_{r['id']}", label_visibility="collapsed", on_change=_save_status, args=(r["id"],),
+            )
+            if r["url"]:
+                c[5].link_button("Open", r["url"])
+            else:
+                c[5].write("-")
+        st.caption("Pick a status from the dropdown; it saves automatically. "
+                   "Note: on free Streamlit hosting this list resets when the app restarts.")
